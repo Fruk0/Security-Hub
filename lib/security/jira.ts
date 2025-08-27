@@ -1,7 +1,43 @@
 import type {
-  CriterionDef, CriterionAnswers, FrameworkDef, FrameworkAnswers
+  CriterionDef, CriterionAnswers, FrameworkDef, FrameworkAnswers, QA
 } from './domain';
-import { shouldCount } from './engine';
+
+/* ===============================
+ * Helpers robustos (idioma/score)
+ * =============================== */
+
+type NormAns = 'yes' | 'no' | 'unknown'
+
+function normalize(v: unknown): NormAns | undefined {
+  const s = String(v ?? '').trim().toLowerCase()
+  if (['yes', 'y', 'si', 'sí', 'true', '1'].includes(s)) return 'yes'
+  if (['no', 'n', 'false', '0'].includes(s)) return 'no'
+  if (['unknown', 'no se', 'no sé', 'nose', 'ns', 'na', 'null', 'undefined'].includes(s)) return 'unknown'
+  return undefined
+}
+
+function toEs(v: unknown) {
+  const n = normalize(v)
+  if (n === 'yes') return 'Sí'
+  if (n === 'no') return 'No'
+  if (n === 'unknown') return 'No sé'
+  return '—'
+}
+
+function countsAsRisk(invert: boolean | undefined, ans: unknown): boolean {
+  const n = normalize(ans)
+  if (!n) return false
+  if (invert) {
+    // invert_logic=true → suma cuando No o No sé
+    return n === 'no' || n === 'unknown'
+  }
+  // normal → suma cuando Sí o No sé
+  return n === 'yes' || n === 'unknown'
+}
+
+/* ===============================
+ * Payload
+ * =============================== */
 
 export function buildPayload(opts: {
   ticket: string;
@@ -14,8 +50,13 @@ export function buildPayload(opts: {
 
   const rationale = framework
     ? framework.def.questions
-        .filter(q => shouldCount(q.riskWhen, framework.answers[q.id]))
-        .map(q => ({ id: q.id, text: q.text, weight: q.weight, answer: framework.answers[q.id] }))
+        .filter(q => countsAsRisk((q as any).invert_logic, (framework.answers as any)[q.id]))
+        .map(q => ({
+          id: q.id,
+          text: q.text,
+          weight: (q as any).weight,
+          answer: (framework.answers as any)[q.id]
+        }))
     : [];
 
   return {
@@ -41,6 +82,10 @@ export function buildPayload(opts: {
   };
 }
 
+/* ===============================
+ * Comentarios
+ * =============================== */
+
 export function buildCommentForCriterion(
   def: CriterionDef,
   answers: CriterionAnswers,
@@ -48,7 +93,7 @@ export function buildCommentForCriterion(
   notes?: string
 ) {
   const linesArr = def.questions
-    .filter(q => answers[q.id] === 'yes')
+    .filter(q => normalize(answers[q.id]) === 'yes')
     .map(q => {
       const j = (just[q.id] ?? '').trim()
       const justLine = j ? `  ${j}` : '  —'
@@ -56,7 +101,7 @@ export function buildCommentForCriterion(
     })
 
   const lines = linesArr.join('\n')
-  const safeBlock = lines.trim().length ? lines : '—' // <- SIEMPRE muestra “—” si quedó vacío
+  const safeBlock = lines.trim().length ? lines : '—'
 
   return [
     `Solicito aplicar el **criterio de ciberseguridad**: ${def.title}.`,
@@ -66,12 +111,19 @@ export function buildCommentForCriterion(
   ].filter(Boolean).join('\n\n')
 }
 
-
-export function buildCommentForFramework(def: FrameworkDef, answers: FrameworkAnswers, score: number, level: string, allAnswered: boolean, notes?: string) {
+export function buildCommentForFramework(
+  def: FrameworkDef,
+  answers: FrameworkAnswers,       // puede venir en es/en; normalizamos dentro
+  score: number,
+  level: string,
+  allAnswered: boolean,
+  notes?: string
+) {
   const lines = def.questions
-    .filter(q => shouldCount(q.riskWhen, answers[q.id]))
-    .map(q => `- ${q.text} (+${q.weight})\n  Respuesta: ${answers[q.id]}`)
+    .filter(q => countsAsRisk((q as any).invert_logic, (answers as any)[q.id]))
+    .map(q => `- ${q.text} (+${(q as any).weight})\n  Respuesta: ${toEs((answers as any)[q.id])}`)
     .join('\n');
+
   return [
     `Solicito registrar el **Security Risk** calculado.`,
     `Nivel: **${level}** (${score} pts).`,
@@ -81,13 +133,14 @@ export function buildCommentForFramework(def: FrameworkDef, answers: FrameworkAn
     notes ? `Notas: ${notes}` : ''
   ].filter(Boolean).join('\n\n');
 }
-// --- NUEVO: comentario para "Revisión solicitada" de un criterio --- //
-import type { QA } from './domain' // [PISTA] si ya importás QA en otro lado, omití esta línea
+
+// --- Comentario para "Revisión solicitada" de un criterio --- //
 
 function toAnswerLabel(ans?: QA) {
-  if (ans === 'yes') return 'Aplica'
-  if (ans === 'no') return 'No aplica'
-  if (ans === 'unknown') return 'Duda'
+  const n = normalize(ans)
+  if (n === 'yes') return 'Aplica'
+  if (n === 'no') return 'No aplica'
+  if (n === 'unknown') return 'Duda'
   return '—'
 }
 

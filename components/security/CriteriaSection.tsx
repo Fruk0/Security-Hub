@@ -1,15 +1,15 @@
 'use client'
 
 import * as React from 'react'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import { Label } from '@/components/ui/label'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
 import ReactMarkdown from 'react-markdown'
 import type { QA } from '@/lib/security/domain'
+import { ChevronRight } from 'lucide-react'
 
 type CriterionQuestion = {
   id: string
@@ -21,6 +21,7 @@ type CriterionDef = {
   id: string
   title: string
   description?: string | null
+  summary?: string | null
   questions: CriterionQuestion[]
 }
 
@@ -54,7 +55,6 @@ export default function CriteriaSection(props: Props) {
     critAnswers,
     critJustifications,
     selectedEvalLabel,
-    statusBadgeClass,
     selectedReadyToAccept,
     onGoToFramework,
     onSelectCriterionId,
@@ -72,47 +72,41 @@ export default function CriteriaSection(props: Props) {
           <div>
             <h3 className="text-lg font-semibold">Criterios (opcional)</h3>
             <p className="text-sm text-muted-foreground">
-              Si alguno aplica, seleccioná el criterio para responder sus afirmaciones. Si no aplica, salteá al framework.
+              Elegí el criterio que aplique y completá sus afirmaciones. Si no aplica ninguno, avanzá directamente al framework.
             </p>
           </div>
-          <Button variant="default" onClick={onGoToFramework}>
-            No aplica / Ir al framework
-          </Button>
+<Button
+  onClick={onGoToFramework}
+  size="sm"
+  className="bg-amber-600 hover:bg-amber-700 text-white px-3 py-1.5 text-sm"
+>
+  Continuar sin criterio
+</Button>
         </div>
 
-        {/* Grid refinado */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {CRITERIA.map((c) => (
             <Card
               key={c.id}
-              className="p-5 hover:border-emerald-300 transition-colors cursor-pointer"
+              className="group relative p-5 hover:border-emerald-300 hover:shadow-md transition cursor-pointer"
               onClick={() => onSelectCriterionId(c.id)}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') onSelectCriterionId(c.id)
+              }}
             >
-              {/* Contenido con jerarquía y aire */}
-              <div className="space-y-3">
-                <CardHeader className="p-0">
+              <CardHeader className="p-0 pr-6 flex justify-between items-center">
+                <div className="space-y-1 min-w-0">
                   <CardTitle className="text-base font-semibold">{c.title}</CardTitle>
-                  {c.description && (
+                  {c.summary && (
                     <CardDescription className="text-sm text-muted-foreground">
-                      {c.description}
+                      {c.summary}
                     </CardDescription>
                   )}
-                </CardHeader>
-
-                <CardContent className="p-0 pt-1">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={(e) => {
-                      e.stopPropagation() // evita doble disparo
-                      onSelectCriterionId(c.id)
-                    }}
-                    className="hover:bg-indigo-500 hover:text-white transition-colors"
-                  >
-                    Usar este criterio
-                  </Button>
-                </CardContent>
-              </div>
+                </div>
+              </CardHeader>
+              <ChevronRight className="absolute top-5 right-5 w-4 h-4 text-muted-foreground opacity-60 group-hover:opacity-100 group-hover:translate-x-0.5 transition" />
             </Card>
           ))}
         </div>
@@ -120,22 +114,50 @@ export default function CriteriaSection(props: Props) {
     )
   }
 
-  const answered = Object.keys(critAnswers).length > 0
+  // ---- Lógica de botón único dinámico ----
+  const totalQs = selectedCriterion.questions.length
+  const answeredCount = selectedCriterion.questions.filter(q => {
+    const v = props.critAnswers[q.id]
+    return v === 'yes' || v === 'no' || v === 'unknown'
+  }).length
+  const allAnswered = answeredCount === totalQs
+  const hasDoubt = selectedCriterion.questions.some(q => props.critAnswers[q.id] === 'unknown')
+
+  const buttonLabel = selectedReadyToAccept
+    ? 'Aceptar por criterio'
+    : allAnswered && hasDoubt
+      ? 'Solicitar revisión de criterio'
+      : 'Continuar al framework'
+
+  const buttonVariant =
+    selectedReadyToAccept || (allAnswered && hasDoubt) ? 'default' : 'outline'
+
+  const buttonStyle =
+    selectedReadyToAccept
+      ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
+      : allAnswered && hasDoubt
+        ? 'bg-amber-600 hover:bg-amber-700 text-white'
+        : '' // outline neutro
 
   const handlePrimaryAction = () => {
     if (!selectedCriterion) return
-
     if (selectedReadyToAccept) {
       onAcceptByCriterion({
         def: selectedCriterion,
         answers: { ...critAnswers },
         justifications: { ...critJustifications },
       })
+
+      // 🔹 Limpiar resto de criterios y volver al estado neutral
+      selectedCriterion.questions.forEach((q) => {
+        onSetAnswer(q.id, '' as QA)
+        onSetJustification(q.id, '')
+      })
+
+      onSelectCriterionId(null) // volver a la lista de criterios
       return
     }
-
-    if (selectedEvalLabel === 'REVISAR') {
-      if (!answered) return
+    if (allAnswered && hasDoubt) {
       onRequestReview({
         def: selectedCriterion,
         answers: { ...critAnswers },
@@ -143,33 +165,33 @@ export default function CriteriaSection(props: Props) {
       })
       return
     }
-
     onDiscardToFramework()
   }
+  // ----------------------------------------
 
   return (
     <>
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0 space-y-1">
-          <h3 className="text-lg font-semibold">{selectedCriterion.title}</h3>
-          {selectedCriterion.description && (
-            <p className="text-sm text-muted-foreground break-words">
-              {selectedCriterion.description}
-            </p>
-          )}
-        </div>
-        <Badge className={statusBadgeClass}>{selectedEvalLabel}</Badge>
+      <div className="space-y-1">
+        <h3 className="text-lg font-semibold">{selectedCriterion.title}</h3>
+        {selectedCriterion.description && (
+          <p className="text-sm text-muted-foreground break-words">
+            {selectedCriterion.description}
+          </p>
+        )}
       </div>
 
-      <div className="space-y-3">
-        {selectedCriterion.questions.map((q) => (
-          <div key={q.id} className="flex flex-col gap-2 border rounded-lg p-3">
+      <div className="rounded-lg border border-gray-200">
+        {selectedCriterion.questions.map((q, idx) => (
+          <div
+            key={q.id}
+            className={cn('p-3', idx > 0 && 'border-t border-gray-200')}
+          >
             <div className="prose prose-sm dark:prose-invert font-medium">
               <ReactMarkdown>{String(q.text ?? '')}</ReactMarkdown>
             </div>
 
             <RadioGroup
-              className="flex gap-6"
+              className="mt-2 flex flex-wrap gap-x-6 gap-y-2"
               value={critAnswers[q.id] ?? ''}
               onValueChange={(v: string) => onSetAnswer(q.id, v as QA)}
             >
@@ -208,25 +230,14 @@ export default function CriteriaSection(props: Props) {
         ))}
       </div>
 
-      {/* Solo acción principal (sin "Volver a criterios") */}
-      <div className="flex flex-wrap items-center gap-3">
+      {/* Único botón, alineado a la izquierda */}
+      <div className="flex justify-start pt-4">
         <Button
           onClick={handlePrimaryAction}
-          className={cn(
-            selectedReadyToAccept && 'bg-emerald-600 hover:bg-emerald-700 text-white',
-            !selectedReadyToAccept &&
-              selectedEvalLabel === 'REVISAR' &&
-              'bg-amber-600 hover:bg-amber-700 text-white'
-          )}
-          variant={
-            selectedReadyToAccept ? 'default' : selectedEvalLabel === 'REVISAR' ? 'default' : 'destructive'
-          }
+          variant={buttonVariant as any}
+          className={cn(buttonStyle)}
         >
-          {selectedReadyToAccept
-            ? 'Aceptar por criterio'
-            : selectedEvalLabel === 'REVISAR'
-            ? 'Solicitar revisión de criterio'
-            : 'Descartar e ir al framework'}
+          {buttonLabel}
         </Button>
       </div>
     </>

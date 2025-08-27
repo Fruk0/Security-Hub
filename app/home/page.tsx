@@ -2,7 +2,7 @@
 
 import React, { useMemo, useEffect, useReducer, useState } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
+// ---import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import { Separator } from '@/components/ui/separator'
@@ -14,6 +14,7 @@ import TicketForm from '@/components/security/TicketForm'
 import CriteriaSection from '@/components/security/CriteriaSection'
 import CriteriaStatusCards from '@/components/security/CriteriaStatusCards'
 import FrameworkSection from '@/components/security/FrameworkSection'
+import StickyRisk from '@/components/security/StickyRisk'
 
 import { loadCriteria, loadFramework, loadLevels } from '@/lib/security/policy'
 import type { QA, CriterionDef, DecisionLabel } from '@/lib/security/domain'
@@ -56,6 +57,7 @@ import {
 } from '@/lib/security/storage'
 import { useRouter } from 'next/navigation'
 
+
 /* =======================
  * Carga de políticas
  * ===================== */
@@ -80,6 +82,27 @@ export default function SecuritySpaceRiskCalculator() {
   // Reducer + actions
   const [state, dispatch] = useReducer(uiReducer, undefined, createInitialState)
   const actions = useMemo(() => createUIActions(dispatch), [dispatch])
+
+function handleAcceptByCriterion(snap: {
+  def: CriterionDef
+  answers: Record<string, QA>
+  justifications: Record<string, string>
+}) {
+  // 1) Registrar aceptación (tu acción actual)
+  actions.acceptByCriterion(snap)
+
+  // 2) Vaciar respuestas de criterios en storage persistente
+  clearCriteriaStorage(state.jiraKey)
+
+  // 3) Vaciar buffers en memoria del reducer
+  actions.replaceCriteriaBuffers({
+    answers: {},
+    justifications: {},
+  })
+
+  // 4) Salir de la vista de criterio (volver a listado/estado neutral)
+  actions.selectCriterionId(null)
+}
 
   // Locales
   const [notes, setNotes] = useState('')
@@ -195,34 +218,62 @@ export default function SecuritySpaceRiskCalculator() {
   }
 
   function resetAllAndLocal() {
-    clearFrameworkStorage(state.jiraKey)
-    clearNotesStorage(state.jiraKey)
-    clearCriteriaStorage(state.jiraKey)
-    actions.changeTicket() // vuelve a edición y limpia buffers en reducer
-    setNotes('')
-    setShowExecution(false)
+  // 1) Limpiar storages persistentes por ticket actual
+  clearFrameworkStorage(state.jiraKey)
+  clearNotesStorage(state.jiraKey)
+  clearCriteriaStorage(state.jiraKey)
+
+  // 2) Resetear estado de la UI (vuelve a edición y limpia buffers del reducer)
+  actions.changeTicket()
+  actions.resetCriteria?.()        // por si existe en tus actions
+  // limpiar la key del ticket y notas locales
+  actions.setTicketKey('')
+  setNotes('')
+  setShowExecution(false)
+
+  // 3) Borrar query params/URL state y navegar a /home
+  // (si tu home es '/', cambiá '/home' por '/')
+  try {
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href)
+      url.search = '' // sin ?params
+      window.history.replaceState({}, '', url.toString())
+    }
+  } catch {}
+
+  router.replace('/home') // o router.replace('/')
+}
+
+function handleBack() {
+  // Si estás dentro de un criterio → volver a la grilla de criterios
+  if (selectedCriterion) {
+    actions.selectCriterionId(null)
+    return
   }
 
-  function handleBack() {
-    if (selectedCriterion) {
-      actions.selectCriterionId(null)
-      return
-    }
-    if (showExecution) {
-      if (state.criterionPass === 'fail') {
-        setShowExecution(false)
-        return
-      }
-      if (state.criterionPass === 'pass') {
-        actions.resetCriteria()
-        return
-      }
-    }
-    if (state.ticketConfirmed && state.criterionPass === 'fail') {
-      actions.resetCriteria()
-      return
-    }
+  // Si estás en framework por descarte de criterio (fail) → con 1 click
+  if (state.ticketConfirmed && state.criterionPass === 'fail') {
+    // apaga ejecución (si estaba activa) y resetea criterios en el mismo paso
+    setShowExecution(false)
+    actions.resetCriteria()
+    return
   }
+
+  // Si venís de un "pass" por criterio y estás en ejecución → con 1 click
+  if (state.criterionPass === 'pass' && showExecution) {
+    actions.resetCriteria()
+    setShowExecution(false)
+    return
+  }
+
+  // Fallback: si solo estaba la ejecución encendida, la apagamos
+  if (showExecution) {
+    setShowExecution(false)
+    return
+  }
+
+  // Si no hay nada que “deshacer”, no hacemos nada (evita segundo click vacío)
+}
 
   async function copyPayload() {
     const mode: 'criterion' | 'framework' | 'pending' =
@@ -297,10 +348,10 @@ export default function SecuritySpaceRiskCalculator() {
   </div>
 )}
 
-          <CardTitle className="text-2xl">SRO (Security Risk Orchestration)</CardTitle>
+          <CardTitle className="text-2xl">SRO - Security Risk Orchestration</CardTitle>
           <CardDescription>
             {state.ticketConfirmed
-              ? 'Seleccioná un criterio (si aplica) o continuá con el framework de riesgo.'
+              ? ''
               : 'Ingresá el ticket de Jira para comenzar.'}
           </CardDescription>
         </CardHeader>
@@ -323,21 +374,25 @@ export default function SecuritySpaceRiskCalculator() {
           {state.ticketConfirmed && state.criterionPass === 'pending' && !state.criterionReviewRequested && (
             <div className="space-y-4">
               <CriteriaSection
-                CRITERIA={CRITERIA}
-                selectedCriterion={selectedCriterion}
-                critAnswers={state.critAnswers}
-                critJustifications={state.critJustifications}
-                selectedEvalLabel={displayLabel(selectedEval.label as DecisionLabel)}
-                statusBadgeClass={cn('shrink-0', badgeColor(selectedEval.label as DecisionLabel))}
-                selectedReadyToAccept={selectedReadyToAccept}
-                onGoToFramework={actions.goToFramework}
-                onSelectCriterionId={actions.selectCriterionId}
-                onSetAnswer={actions.setCritAnswer}
-                onSetJustification={actions.setCritJustification}
-                onAcceptByCriterion={actions.acceptByCriterion}
-                onRequestReview={actions.requestReview}
-                onDiscardToFramework={actions.goToFramework}
-              />
+  CRITERIA={CRITERIA}
+  selectedCriterion={selectedCriterion}
+  critAnswers={state.critAnswers}
+  critJustifications={state.critJustifications}
+  selectedEvalLabel={displayLabel(selectedEval.label as DecisionLabel)}
+  statusBadgeClass={cn('shrink-0', badgeColor(selectedEval.label as DecisionLabel))}
+  selectedReadyToAccept={selectedReadyToAccept}
+  onGoToFramework={actions.goToFramework}
+  onSelectCriterionId={actions.selectCriterionId}
+  onSetAnswer={actions.setCritAnswer}
+  onSetJustification={actions.setCritJustification}
+  onAcceptByCriterion={handleAcceptByCriterion}
+  onRequestReview={actions.requestReview}
+  onDiscardToFramework={actions.goToFramework}
+  onCopyPayload={copyPayload}
+  onCopyJiraComment={copyJiraComment}
+  copiedJSON={copiedJSON}
+  copiedComment={copiedComment}
+/>
             </div>
           )}
 
@@ -352,16 +407,18 @@ export default function SecuritySpaceRiskCalculator() {
 
           {/* Framework de riesgo */}
           {showFramework && (
-            <FrameworkSection
-              FRAMEWORK={FRAMEWORK}
-              level={level}
-              score={score}
-              levelColor={levelColor}
-              progressPct={progressPct}
-              answers={state.frameworkAnswers}
-              onSetAnswer={(qid, v) => actions.setFrameworkAnswer(qid, v as QA)}
-            />
-          )}
+  <FrameworkSection
+    FRAMEWORK={FRAMEWORK}
+    level={level}
+    score={score}
+    levelColor={levelColor}
+    progressPct={progressPct}
+    answers={state.frameworkAnswers}
+    onSetAnswer={(qid, v) => actions.setFrameworkAnswer(qid, v as QA)}
+    onCopyJiraComment={copyJiraComment}        // ← usa tu función existente
+    copiedComment={copiedComment}              // ← pasa el estado para feedback
+  />
+)}
 
           {/* Sticky de criterio (en vivo) */}
           {state.ticketConfirmed && state.criterionPass === 'pending' && selectedCriterion && (
@@ -396,26 +453,13 @@ export default function SecuritySpaceRiskCalculator() {
             </div>
           )}
 
-          {/* Score sticky (temporal/final) */}
-          {state.ticketConfirmed && state.criterionPass === 'fail' && (
-            <div className="fixed bottom-6 right-6 z-50">
-              <Card className="shadow-xl border">
-                <CardContent className="py-3 px-4">
-                  <div className="flex items-center gap-3">
-                    <Badge className={cn('text-white', levelColor)}>{level}</Badge>
-                    <span className="font-semibold text-lg">{score} pts</span>
-                    <span className="text-xs text-muted-foreground">
-                      {frameworkReady ? 'Riesgo FINAL' : 'Riesgo temporal'}
-                    </span>
-                  </div>
-                  <div className="mt-1 text-xs text-muted-foreground text-right">
-                    {answeredCount}/{FRAMEWORK.questions.length} respondidas
-                  </div>
-                  <Progress value={progressPct} className="mt-2" />
-                </CardContent>
-              </Card>
-            </div>
-          )}
+{state.ticketConfirmed && state.criterionPass === 'fail' && (
+  <StickyRisk
+    answers={state.frameworkAnswers}
+    framework={FRAMEWORK}
+    bandsOverride={FRAMEWORK?.scoring?.bands}
+  />
+)}
 
 <StickyResetButton
   show={state.ticketConfirmed}

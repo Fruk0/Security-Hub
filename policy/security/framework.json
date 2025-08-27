@@ -1,18 +1,40 @@
 {
+  "version": "1.0.1",
+  "framework": "Security Risk Quick Scoring",
+  "description": "Formulario de 8 ítems diseñado para clasificar el nivel de riesgo según criterios de seguridad reconocidos.",
   "questions": [
-    { "id": "q1", "text": "¿Este cambio crea o modifica un endpoint o ruta accesible?", "weight": 1, "riskType": "Superficie nueva", "riskWhen": "yes" },
-    { "id": "q2", "text": "¿Es accesible desde Internet o por usuarios externos?", "weight": 2, "riskType": "Exposición externa", "riskWhen": "yes" },
-    { "id": "q3", "text": "¿Requiere login, token, JWT o manejo de sesión?", "weight": 1, "riskType": "Lógica de sesión", "riskWhen": "yes" },
-    { "id": "q4", "text": "¿Afecta control de roles, permisos o lógica de autorización?", "weight": 2, "riskType": "Autorización / acceso", "riskWhen": "yes" },
-    { "id": "q5", "text": "¿Procesa o expone datos sensibles (PII, credenciales, financieros)?", "weight": 3, "riskType": "Confidencialidad", "riskWhen": "yes" },
-    { "id": "q6", "text": "¿Permite operaciones críticas (altas, bajas, transferencias, privilegios)?", "weight": 3, "riskType": "Impacto funcional", "riskWhen": "yes" },
-    { "id": "q7", "text": "¿Recibe entradas complejas (uploads, URLs, archivos, input libre)?", "weight": 2, "riskType": "Riesgo de entrada", "riskWhen": "yes" },
-    { "id": "q8", "text": "¿Valida correctamente todas las entradas en backend?", "weight": 2, "riskType": "Ausencia de validación", "riskWhen": "no_or_unknown" },
-    { "id": "q9", "text": "¿Consume APIs externas, SDKs o servicios nuevos?", "weight": 1, "riskType": "Integración externa", "riskWhen": "yes" },
-    { "id": "q10", "text": "¿Requiere configuración, secretos o acceso a infraestructura?", "weight": 2, "riskType": "Config / secretos", "riskWhen": "yes" },
-    { "id": "q11", "text": "¿Maneja JWT, hashing, firmas o algoritmos criptográficos?", "weight": 2, "riskType": "Criptografía", "riskWhen": "yes" },
-    { "id": "q12", "text": "¿Introduce lógica de negocio nueva o modifica procesos existentes?", "weight": 2, "riskType": "Lógica personalizada", "riskWhen": "yes" },
-    { "id": "q13", "text": "¿Impacta múltiples capas o sistemas compartidos?", "weight": 1, "riskType": "Propagación", "riskWhen": "yes" },
-    { "id": "q14", "text": "¿Incluye logs de seguridad/monitoreo/alertas sobre la funcionalidad?", "weight": 1, "riskType": "Trazabilidad", "riskWhen": "no_or_unknown" }
-  ]
+    { "id": 1, "text": "¿El cambio expone un endpoint o ruta accesible desde internet?", "dimension": "Likelihood", "weight": 3, "invert_logic": false, "notes": "Superficie de ataque / exposición externa." },
+    { "id": 2, "text": "¿Requiere o modifica autenticación, sesiones o roles/privilegios?", "dimension": "Impact",     "weight": 3, "invert_logic": false, "notes": "Control de acceso, session handling, BOLA/BOPLA." },
+    { "id": 3, "text": "¿Procesa o transmite datos sensibles/financieros (PII, credenciales, cuentas)?", "dimension": "Impact", "weight": 3, "invert_logic": false, "notes": "Confidencialidad, cumplimiento (PCI/GDPR)." },
+    { "id": 4, "text": "¿Permite operaciones críticas (transferencias, altas/bajas, préstamos, límites)?", "dimension": "Impact", "weight": 3, "invert_logic": false, "notes": "Integridad y riesgo de negocio." },
+    { "id": 5, "text": "¿Recibe input complejo (archivos, URLs, JSON libre, input no validado)?", "dimension": "Likelihood", "weight": 2, "invert_logic": false, "notes": "Injection / validación de entradas." },
+    { "id": 6, "text": "¿Integra con APIs/SDKs externos o dependencias nuevas?", "dimension": "Likelihood", "weight": 2, "invert_logic": false, "notes": "Supply chain / riesgo de integración." },
+    { "id": 7, "text": "¿Requiere secretos/llaves o usa cripto nueva (JWT, hashing, firmas)?", "dimension": "Impact", "weight": 2, "invert_logic": false, "notes": "Configuración sensible / criptografía." },
+    { "id": 8, "text": "¿Cuenta con rate-limit, logs y alertas de seguridad para esta funcionalidad?", "dimension": "Likelihood", "weight": 2, "invert_logic": true,  "notes": "Si la respuesta es 'No' o 'No sé', suma puntaje (penaliza falta de detección/anti-abuso)." }
+  ],
+  "responses": ["Sí", "No", "No sé"],
+  "scoring": {
+    "rules": [
+      { "id": "NOSE_COUNTS_AS_YES", "condition": "Respuesta = 'No sé'", "effect": "Cuenta como 'Sí' para puntaje (salvo preguntas con invert_logic=true)." },
+      { "id": "EXPOSED_AND_SENSITIVE_MIN_HIGH", "condition": "(Q1 = Sí|No sé) AND (Q2 = Sí|No sé OR Q3 = Sí|No sé OR Q4 = Sí|No sé)", "effect": "Severidad mínima = 'Alto' (si el cálculo base da menos, elevar a 'Alto')." }
+    ],
+    "bands": [
+      { "min": 0, "max": 5, "label": "Bajo" },
+      { "min": 6, "max": 9, "label": "Medio" },
+      { "min": 10, "max": 14, "label": "Alto" },
+      { "min": 15, "max": 20, "label": "Crítico" }
+    ],
+    "ranges": { "Likelihood_max": 9, "Impact_max": 11, "Total_max": 20 },
+    "aggregation": "FinalScore = Sum(Likelihood) + Sum(Impact); FinalBand = bands(FinalScore) con reglas aplicadas."
+  },
+  "ui": {
+    "one_page": true,
+    "answer_type": "radio",
+    "require_comment_on": ["No sé"],
+    "defaults": { "unanswered": "No" }
+  },
+  "storage": {
+    "persist": ["answers", "final_score", "final_band", "timestamp", "ticket_id", "comments"],
+    "target": "Jira u otra VM tool"
+  }
 }

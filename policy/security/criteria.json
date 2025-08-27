@@ -3,6 +3,7 @@
     {
       "id": "C1",
       "title": "Criterio 1 – PATCH en servicio previamente validado",
+      "summary": "Cambios menores sin impacto funcional (logs/refactors/deps)",
       "description": "Cambios mínimos en el código (ej: logs, refactors, cambios de dependencias) sin impacto en lógica de negocio ni entidades de entrada/salida, sobre servicios ya revisados por Ciber en versiones anteriores.",
       "passRule": { "type": "allYes" },
       "questions": [
@@ -16,6 +17,7 @@
     {
       "id": "C2",
       "title": "Criterio 2 – Contenido público accedido vía Contentful",
+      "summary": "Servicios limitados a información pública, sin autenticación ni capacidad de modificación de datos.",
       "description": "Servicios que consultan exclusivamente contenido público (FAQs, legales, beneficios, banners), sin requerir autenticación ni permitir modificación de datos.",
       "passRule": { "type": "allYes" },
       "questions": [
@@ -28,6 +30,7 @@
     {
       "id": "C3",
       "title": "Criterio 3 – Procesos batch internos sin impacto crítico",
+      "summary": "Ejecuciones en backend sin exposición de endpoints ni tratamiento de datos sensibles o financieros.",
       "description": "Procesos batch ejecutados en backend, que no exponen endpoints y no operan sobre dinero o datos sensibles de cuenta.",
       "passRule": { "type": "allYes" },
       "questions": [
@@ -40,6 +43,7 @@
     {
       "id": "C4",
       "title": "Criterio 4 – Servicios sin cambios en capa canal",
+      "summary": "Funcionalidades previamente evaluadas, sin cambios en versiones ni contratos de entrada/salida.",
       "description": "Servicios que ya fueron evaluados y no presentan cambios ni en versiones, ni en contratos de entrada/salida.",
       "passRule": { "type": "allYes" },
       "questions": [
@@ -50,7 +54,8 @@
     },
     {
       "id": "C5",
-      "title": "Criterio 5 – Hotfix sin relación a fraude",
+      "title": "Criterio 5 – Hotfix no crítico",
+      "summary": "Correcciones en producción que no afectan controles de seguridad ni procesos de fraude.",
       "description": "Hotfix aplicados en producción que no corrigen incidentes de fraude ni afectan controles de seguridad críticos.",
       "passRule": { "type": "allYes" },
       "questions": [
@@ -60,7 +65,8 @@
     },
     {
       "id": "C6",
-      "title": "Criterio 6 – Cambios en Frontend sin impacto crítico",
+      "title": "Criterio 6 – Ajustes en frontend",
+      "summary": "Modificaciones visuales o de interfaz sin impacto en seguridad o validaciones del backend.",
       "description": "Modificaciones en la capa frontend que no afectan seguridad ni validaciones del backend.",
       "passRule": { "type": "allYes" },
       "questions": [
@@ -72,6 +78,7 @@
     {
       "id": "C7",
       "title": "Criterio 7 – Backoffice de uso interno",
+       "summary": "Aplicaciones internas de acceso controlado, sin transacciones críticas ni exposición de información sensible.",
       "description": "Servicios o aplicaciones de backoffice internos, de acceso restringido, que no operan sobre transacciones críticas ni exponen información sensible hacia fuera.",
       "passRule": { "type": "allYes" },
       "questions": [
