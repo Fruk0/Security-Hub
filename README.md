@@ -2,7 +2,7 @@
 
 MVP para orquestar decisiones de riesgo de seguridad: criterios rápidos, framework de riesgo, notas y exportación a Jira. Incluye persistencia local por ticket, deep-links, capa de servicios y tests.
 
-<img width="975" height="460" alt="image" src="https://github.com/user-attachments/assets/8ba27788-a004-46aa-8ac2-4b0fbf189f97" />
+<img width="837" height="587" alt="image" src="https://github.com/user-attachments/assets/cf22bf05-8ac5-4e0e-ba2b-a6d704078a76" />
 
 ## 🚀 Despliegue
 
