@@ -7,7 +7,8 @@ import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import { Separator } from '@/components/ui/separator'
 import { cn } from '@/lib/utils'
-import { ArrowLeft } from 'lucide-react'
+import { NavigationButtons } from '@/components/ui/navigation-buttons'
+import { StickyResetButton } from '@/components/ui/sticky-reset-button'
 
 import TicketForm from '@/components/security/TicketForm'
 import CriteriaSection from '@/components/security/CriteriaSection'
@@ -53,6 +54,7 @@ import {
   useCriteriaStorage,
   clearCriteriaStorage,
 } from '@/lib/security/storage'
+import { useRouter } from 'next/navigation'
 
 /* =======================
  * Carga de políticas
@@ -88,7 +90,7 @@ export default function SecuritySpaceRiskCalculator() {
 
   // ---------- URL Sync ----------
   useUrlSync({
-    jiraKey: state.jiraKey,
+    jiraKey: state.ticketConfirmed ? state.jiraKey : null,
     selectedCriterionId: state.selectedCriterionId,
     setTicketKey: (k) => actions.setTicketKey(k.toUpperCase()),
     selectCriterionId: actions.selectCriterionId,
@@ -177,6 +179,13 @@ export default function SecuritySpaceRiskCalculator() {
   )
 
   const jiraUrl = useMemo(() => selectJiraUrl(JIRA_BASE, state.jiraKey), [state.jiraKey])
+
+  const hasStickyInfo = useMemo(() => {
+    return (
+      (state.ticketConfirmed && state.criterionPass === 'pending' && selectedCriterion) ||
+      (state.ticketConfirmed && state.criterionPass === 'fail')
+    )
+  }, [state.ticketConfirmed, state.criterionPass, selectedCriterion])
 
   // ---------- Helpers ----------
   async function copyTicketKey() {
@@ -273,6 +282,8 @@ export default function SecuritySpaceRiskCalculator() {
     setTimeout(() => setCopiedComment(null), 1500)
   }
 
+  const router = useRouter()
+
   /* ==========================================
    * Render
    * ======================================== */
@@ -281,26 +292,16 @@ export default function SecuritySpaceRiskCalculator() {
       <Card className="shadow-lg">
         <CardHeader>
           {showBack && (
-            <div className="mb-2">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleBack}
-                title="Volver"
-                aria-label="Volver"
-                className="px-2"
-              >
-                <ArrowLeft className="h-4 w-4 mr-2" />
-                Volver
-              </Button>
-            </div>
-          )}
+  <div className="mb-2">
+    <NavigationButtons onBack={handleBack} />
+  </div>
+)}
 
           <CardTitle className="text-2xl">SRO (Security Risk Orchestration)</CardTitle>
           <CardDescription>
             {state.ticketConfirmed
               ? 'Seleccioná un criterio (si aplica) o continuá con el framework de riesgo.'
-              : 'Confirmá el ticket. Luego, opcionalmente elegí un criterio (si aplica) o pasá directo al framework de riesgo.'}
+              : 'Ingresá el ticket de Jira para comenzar.'}
           </CardDescription>
         </CardHeader>
 
@@ -416,27 +417,11 @@ export default function SecuritySpaceRiskCalculator() {
             </div>
           )}
 
-          {/* Acciones */}
-          {showActions && (
-            <>
-              <div className="flex flex-wrap gap-3">
-                <Button onClick={copyPayload}>
-                  {copiedJSON === 'ok' ? 'Copiado' : copiedJSON === 'err' ? 'Error ❌' : 'Copiar payload JSON'}
-                </Button>
-                <Button onClick={copyJiraComment}>
-                  {copiedComment === 'ok' ? 'Copiado' : copiedComment === 'err' ? 'Error ❌' : 'Copiar comentario Jira'}
-                </Button>
-                <Button variant="secondary" onClick={resetAllAndLocal}>
-                  Reiniciar
-                </Button>
-              </div>
-
-              <Separator />
-              <div className="text-xs text-muted-foreground">
-                MVP local. Próximo paso: endpoint backend que actualice Jira (labels, score, level, comentario con rationale).
-              </div>
-            </>
-          )}
+<StickyResetButton
+  show={state.ticketConfirmed}
+  avoidOverlap={hasStickyInfo}
+  onClick={resetAllAndLocal}
+/>
         </CardContent>
       </Card>
     </div>
