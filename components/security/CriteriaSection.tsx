@@ -80,18 +80,39 @@ export default function CriteriaSection(props: Props) {
           </Button>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-2">
+        {/* Grid refinado */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {CRITERIA.map((c) => (
-            <Card key={c.id} className="border">
-              <CardHeader className="py-4">
-                <CardTitle className="text-base">{c.title}</CardTitle>
-                {c.description && <CardDescription>{c.description}</CardDescription>}
-              </CardHeader>
-              <CardContent className="flex items-center justify-between pt-0">
-                <Button variant="secondary" onClick={() => onSelectCriterionId(c.id)}>
-                  Usar este criterio
-                </Button>
-              </CardContent>
+            <Card
+              key={c.id}
+              className="p-5 hover:border-emerald-300 transition-colors cursor-pointer"
+              onClick={() => onSelectCriterionId(c.id)}
+            >
+              {/* Contenido con jerarquía y aire */}
+              <div className="space-y-3">
+                <CardHeader className="p-0">
+                  <CardTitle className="text-base font-semibold">{c.title}</CardTitle>
+                  {c.description && (
+                    <CardDescription className="text-sm text-muted-foreground">
+                      {c.description}
+                    </CardDescription>
+                  )}
+                </CardHeader>
+
+                <CardContent className="p-0 pt-1">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={(e) => {
+                      e.stopPropagation() // evita doble disparo
+                      onSelectCriterionId(c.id)
+                    }}
+                    className="hover:bg-indigo-500 hover:text-white transition-colors"
+                  >
+                    Usar este criterio
+                  </Button>
+                </CardContent>
+              </div>
             </Card>
           ))}
         </div>
@@ -187,11 +208,8 @@ export default function CriteriaSection(props: Props) {
         ))}
       </div>
 
+      {/* Solo acción principal (sin "Volver a criterios") */}
       <div className="flex flex-wrap items-center gap-3">
-        <Button onClick={() => onSelectCriterionId(null)} variant="secondary">
-          Volver a criterios
-        </Button>
-
         <Button
           onClick={handlePrimaryAction}
           className={cn(
