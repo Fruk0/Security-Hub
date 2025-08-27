@@ -4,6 +4,7 @@ import * as React from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
 
 type Props = {
   showAccepted: boolean
@@ -18,16 +19,40 @@ export default function CriteriaStatusCards({
   onCopyJiraComment,
   copiedComment,
 }: Props) {
+  const btnClass = cn(
+    'shrink-0 text-white transition-colors',
+    copiedComment === 'ok'
+      ? 'bg-sky-500 hover:bg-sky-600 animate-pulse'
+      : copiedComment === 'err'
+      ? 'bg-rose-600 hover:bg-rose-700'
+      : 'bg-sky-600 hover:bg-sky-700'
+  )
+
+  const labelText =
+    copiedComment === 'ok'
+      ? 'Copiado'
+      : copiedComment === 'err'
+      ? 'Error ❌'
+      : 'Copiar comentario en Jira'
+
   return (
     <>
       {showAccepted && (
         <Card className="border border-emerald-600/40 bg-emerald-50 dark:bg-emerald-950/20">
           <CardContent className="py-4">
-            <div className="flex items-center gap-2">
-              <Badge className="bg-emerald-600 text-white">Aceptado</Badge>
-              <span className="text-sm">
-                Ticket aceptado por <strong>criterio de ciberseguridad</strong>.
-              </span>
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <Badge className="bg-emerald-600 text-white">Aceptado</Badge>
+                <span className="text-sm">
+                  Ticket aceptado por <strong>criterio de ciberseguridad</strong>.
+                </span>
+              </div>
+
+              {onCopyJiraComment && (
+                <Button onClick={onCopyJiraComment} className={btnClass}>
+                  {labelText}
+                </Button>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -38,21 +63,15 @@ export default function CriteriaStatusCards({
           <CardContent className="py-4">
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
               <div className="flex items-center gap-2">
-                <Badge className="bg-amber-600 text-white">Revisión solicitada</Badge>
+                <Badge className="bg-amber-600 text-white">Solicitar revisión</Badge>
                 <span className="text-sm">
                   Se requiere <strong>revisión del criterio de ciberseguridad</strong>.
                 </span>
               </div>
+
               {onCopyJiraComment && (
-                <Button
-                  onClick={onCopyJiraComment}
-                  className="bg-amber-600 hover:bg-amber-700 text-white shrink-0"
-                >
-                  {copiedComment === 'ok'
-                    ? 'Copiado'
-                    : copiedComment === 'err'
-                    ? 'Error ❌'
-                    : 'Copiar comentario Jira'}
+                <Button onClick={onCopyJiraComment} className={btnClass}>
+                  {labelText}
                 </Button>
               )}
             </div>
